@@ -1,0 +1,213 @@
+name: Selenium CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: selenium-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  quality:
+    name: Code quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Python and pip cache
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install and validate dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip check
+
+      - name: Check code style
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Check test collection and registered markers
+        run: pytest --collect-only -q
+
+  selenium:
+    name: Chrome / ${{ matrix.suite }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      # A failed smoke job must not cancel the regression job's diagnostics.
+      fail-fast: false
+      matrix:
+        suite: [smoke, regression]
+    env:
+      SAUCE_USERNAME: standard_user
+      # Sauce Demo publishes this password on its login page. The public demo
+      # fallback lets fork PRs run without access to repository secrets.
+      SAUCE_PASSWORD: ${{ secrets.SAUCE_PASSWORD || 'secret_sauce' }}
+      TEST_ENV: qa
+      HEADLESS: "true"
+      CHROME_NO_SANDBOX: "true"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      # Pin actions to immutable commits; comments identify their release line.
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Python and pip cache
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip check
+
+      - name: Check demo credential configuration
+        run: |
+          if [ -z "$SAUCE_PASSWORD" ] || [ "$SAUCE_PASSWORD" = "replace-with-demo-password" ]; then
+            echo "::error::SAUCE_PASSWORD must match the public demo password displayed on Sauce Demo; remove or correct a placeholder repository secret."
+            exit 1
+          fi
+
+      - name: Install stable Chrome and matching ChromeDriver
+        id: chrome
+        uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2
+        with:
+          chrome-version: stable
+          install-chromedriver: true
+          install-dependencies: true
+
+      - name: Verify Chrome and ChromeDriver installation
+        env:
+          CHROME_BINARY: ${{ steps.chrome.outputs.chrome-path }}
+          WEBDRIVER_PATH: ${{ steps.chrome.outputs.chromedriver-path }}
+        run: |
+          test -x "$CHROME_BINARY"
+          test -x "$WEBDRIVER_PATH"
+          "$CHROME_BINARY" --version
+          "$WEBDRIVER_PATH" --version
+
+      - name: Run ${{ matrix.suite }} tests in headless Chrome
+        id: tests
+        env:
+          CHROME_BINARY: ${{ steps.chrome.outputs.chrome-path }}
+          WEBDRIVER_PATH: ${{ steps.chrome.outputs.chromedriver-path }}
+        # pipefail preserves a pytest failure when output is piped through tee.
+        # No retries or continue-on-error.
+        run: |
+          set -o pipefail
+          mkdir -p logs
+          pytest --browser chrome --headless -m "${{ matrix.suite }}" -v \
+            --env qa --reruns 0 \
+            --html=reports/report.html --self-contained-html \
+            --alluredir=reports/allure-results --clean-alluredir \
+            --junitxml=reports/junit.xml 2>&1 | tee logs/pytest.log
+
+      # Preserve primary diagnostics before installing or running the Allure CLI.
+      - name: Upload self-contained HTML report
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: selenium-${{ matrix.suite }}-html-report
+          path: reports/report.html
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Allure results
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: selenium-${{ matrix.suite }}-allure-results
+          path: reports/allure-results/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload JUnit results
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: selenium-${{ matrix.suite }}-junit-results
+          path: reports/junit.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload failure screenshots
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: selenium-${{ matrix.suite }}-screenshots
+          path: screenshots/*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload automation logs
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: selenium-${{ matrix.suite }}-logs
+          path: logs/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Write run summary
+        if: ${{ always() && !cancelled() }}
+        env:
+          TEST_SUITE: ${{ matrix.suite }}
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: |
+          printf '### Headless Chrome: %s\n\n' "$TEST_SUITE" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Test step outcome: **%s**.\n\n' "$TEST_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Download suite-specific reports and logs from **Artifacts** below. Failure screenshots are uploaded when available. Retention: 14 days.\n' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Java for Allure CLI
+        if: ${{ always() && !cancelled() && steps.tests.outcome != 'skipped' }}
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Node for Allure CLI
+        if: ${{ always() && !cancelled() && steps.tests.outcome != 'skipped' }}
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+
+      - name: Generate Allure HTML report
+        if: ${{ always() && !cancelled() && steps.tests.outcome != 'skipped' }}
+        timeout-minutes: 3
+        run: |
+          if [ -d reports/allure-results ]; then
+            npx --yes --package=allure-commandline@2.46.1 allure generate reports/allure-results --clean -o reports/allure-report
+          fi
+
+      - name: Upload rendered Allure report
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: selenium-${{ matrix.suite }}-allure-report
+          path: reports/allure-report/
+          if-no-files-found: warn
+          retention-days: 14

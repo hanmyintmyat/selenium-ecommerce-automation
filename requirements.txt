@@ -1,0 +1,12 @@
+# Direct dependencies pinned to the versions used for framework validation.
+selenium==4.50.0
+pytest==9.1.1
+webdriver-manager==4.1.2
+allure-pytest==2.16.2
+pytest-html==4.2.0
+Faker==40.41.0
+python-dotenv==1.2.4
+pytest-xdist==3.8.0
+pytest-rerunfailures==16.7
+filelock==4.0.12
+ruff==0.16.10

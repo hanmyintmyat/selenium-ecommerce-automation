@@ -1,0 +1,29 @@
+services:
+  selenium:
+    image: selenium/standalone-chrome:4.48.0-20260905
+    shm_size: 2gb
+    environment:
+      SE_NODE_MAX_SESSIONS: "2"
+      SE_NODE_OVERRIDE_MAX_SESSIONS: "true"
+      SE_NODE_SESSION_TIMEOUT: "120"
+    healthcheck:
+      test: ["CMD", "/opt/bin/check-grid.sh", "--host", "0.0.0.0", "--port", "4444"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 10s
+
+  tests:
+    build: .
+    env_file:
+      - .env
+    environment:
+      SELENIUM_REMOTE_URL: http://selenium:4444
+      HEADLESS: "true"
+    depends_on:
+      selenium:
+        condition: service_healthy
+    volumes:
+      - ./reports:/app/reports
+      - ./screenshots:/app/screenshots
+      - ./logs:/app/logs

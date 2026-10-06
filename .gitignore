@@ -1,0 +1,30 @@
+# Local Python environments and caches (any directory depth).
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.driver-cache/
+driver_cache/
+driver-cache/
+.wdm/
+# Local credentials/configuration; keep only the shareable template.
+.env
+.env.*
+!.env.example
+# Runtime artifact directories, including local .gitkeep files.
+reports/
+screenshots/
+logs/
+# Generated HTML/XML reports, including outputs outside the default directories.
+*.html
+*.xml
+# Allure's default output location when --alluredir=allure-results is used.
+allure-results/
+allure-report/
+.coverage*
+htmlcov/
+.idea/
+.vscode/
+.DS_Store

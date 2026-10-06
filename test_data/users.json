@@ -1,0 +1,68 @@
+{
+  "users": {
+    "standard": "standard_user",
+    "locked_out": "locked_out_user"
+  },
+  "login_cases": [
+    {
+      "id": "invalid_password",
+      "username": "standard",
+      "password": "invalid",
+      "error": "Epic sadface: Username and password do not match any user in this service"
+    },
+    {
+      "id": "invalid_username",
+      "username": "invalid",
+      "password": "valid",
+      "error": "Epic sadface: Username and password do not match any user in this service"
+    },
+    {
+      "id": "locked_out_user",
+      "username": "locked_out",
+      "password": "valid",
+      "error": "Epic sadface: Sorry, this user has been locked out."
+    },
+    {
+      "id": "empty_username",
+      "username": "empty",
+      "password": "valid",
+      "error": "Epic sadface: Username is required"
+    },
+    {
+      "id": "empty_password",
+      "username": "standard",
+      "password": "empty",
+      "error": "Epic sadface: Password is required"
+    },
+    {
+      "id": "both_fields_empty",
+      "username": "empty",
+      "password": "empty",
+      "error": "Epic sadface: Username is required"
+    }
+  ],
+  "products": [
+    {"name": "Sauce Labs Backpack", "price": "29.99"},
+    {"name": "Sauce Labs Bike Light", "price": "9.99"},
+    {"name": "Sauce Labs Bolt T-Shirt", "price": "15.99"},
+    {"name": "Sauce Labs Fleece Jacket", "price": "49.99"},
+    {"name": "Sauce Labs Onesie", "price": "7.99"},
+    {"name": "Test.allTheThings() T-Shirt (Red)", "price": "15.99"}
+  ],
+  "sorting_cases": [
+    {"id": "name_a_to_z", "value": "az", "field": "name", "reverse": false},
+    {"id": "name_z_to_a", "value": "za", "field": "name", "reverse": true},
+    {"id": "price_low_to_high", "value": "lohi", "field": "price", "reverse": false},
+    {"id": "price_high_to_low", "value": "hilo", "field": "price", "reverse": true}
+  ],
+  "checkout_cases": [
+    {"id": "missing_first_name", "field": "first_name", "error": "Error: First Name is required"},
+    {"id": "missing_last_name", "field": "last_name", "error": "Error: Last Name is required"},
+    {"id": "missing_postal_code", "field": "postal_code", "error": "Error: Postal Code is required"}
+  ],
+  "checkout": {
+    "tax_rate": "0.08",
+    "success_message": "Thank you for your order!",
+    "completion_details": "Your order has been dispatched, and will arrive just as fast as the pony can get there!"
+  }
+}

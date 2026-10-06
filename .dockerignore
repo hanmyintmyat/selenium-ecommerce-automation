@@ -1,0 +1,13 @@
+.git
+.venv
+venv
+.env
+.env.*
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.driver-cache
+reports
+screenshots
+logs
